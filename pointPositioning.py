@@ -211,7 +211,7 @@ def pointPositioning(satellites, R_0, ionoParams):
             dtr = incognite_stima[3][0]/c
             
         new_row = pd.DataFrame([[w, xr, yr, zr, dtr, len(obs_tk)]], columns=['datetime', 'xr', 'yr', 'zr', 'dtr', 'in_view_sat'])
-        print(w, 'ok')
+        #print(w, 'ok')
         results_cart = results_cart.append(new_row)
 
     
