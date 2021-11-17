@@ -103,7 +103,6 @@ def pointPositioning(satellites, R_0, ionoParams):
     for w in all_times:
         mask = satellites['time'] == w
         obs_tk = satellites[mask].reset_index().drop(columns=['index'])
-        P1 = (np.array([obs_tk['P1'].to_list()])).transpose()
         
         start_day = w.day - w.weekday() - 1
         t = (w.day - start_day)*24*3600 + w.hour*3600 + w.minute*60 + w.second
@@ -192,6 +191,7 @@ def pointPositioning(satellites, R_0, ionoParams):
                 
                 
             # Termini noti
+            P1 = (np.array([obs_tk['P1'].to_list()])).transpose()
             b = np.array(b)
             A = np.array(A)
             sin_el = np.array(sin_el)
@@ -211,7 +211,7 @@ def pointPositioning(satellites, R_0, ionoParams):
             dtr = incognite_stima[3][0]/c
             
         new_row = pd.DataFrame([[w, xr, yr, zr, dtr, len(obs_tk)]], columns=['datetime', 'xr', 'yr', 'zr', 'dtr', 'in_view_sat'])
-        #print(w, 'ok')
+        print(w, 'ok')
         results_cart = results_cart.append(new_row)
 
     

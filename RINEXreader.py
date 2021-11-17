@@ -42,15 +42,50 @@ def readSP3(file_path):
                    eph = eph.append(new_eph)
     eph = eph.reset_index().drop(columns = ['index'])
     return eph
-    
+
+def checkFormat(i):
+    for j in range(len(i)):
+        if i[j] == 'E':
+            ID = 'E'
+        elif i[j] == 'D':
+            ID = 'D'
+    return ID
+
 def getIonoParams(file_path):
     file = open(file_path, 'r')
     lines = file.readlines()
-    ion_alpha = lines[5].split()[0:4]
-    ion_beta = lines[6].split()[0:4]
-    for i in range(len(ion_alpha)):
-        ion_alpha[i] = float(ion_alpha[i])
-        ion_beta[i] = float(ion_beta[i])
+    for i in range(10):
+        l_i = lines[i].split()
+        if len(l_i) > 4:
+            if l_i[5] == 'ALPHA':
+                ion_alpha = l_i[0:4]
+            elif l_i[5] == 'BETA':
+                ion_beta = l_i[0:4]
+    ID = checkFormat(ion_alpha[0])
+    if ID == 'E':
+        for j in range(len(ion_alpha)):
+            ion_alpha[j] = float(ion_alpha[j])
+            ion_beta[j] = float(ion_beta[j])
+    else:
+        if ID == 'D':
+            for j in range(len(ion_alpha)):
+                valA = ion_alpha[j].split('D')
+                base = valA[0]
+                if base[0] != '-':
+                    valA = '0'+valA[0]+'E'+valA[1]
+                    ion_alpha[j] = float(valA)
+                else:
+                    valA = '-0'+valA[0][1:]+'E'+valA[1]
+                    ion_alpha[j] = float(valA)
+            for j in range(len(ion_beta)):
+                valB = ion_beta[j].split('D')
+                base = valB[0]
+                if base[0] != '-':
+                    valB = '0'+valB[0]+'E'+valB[1]
+                    ion_beta[j] = float(valB)
+                else:
+                    valB = '-0'+valB[0][1:]+'E'+valB[1]
+                    ion_beta[j] = float(valB)
     return [ion_alpha, ion_beta]
 
 def getStartPos(file_path):

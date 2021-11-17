@@ -11,12 +11,16 @@ import RINEXreader
 
 def fixTime(df):
     ID_list = []
+    maxx = df['time'].max()
     for i in range(len(df)):
         t = df['time'][i]
         while t.second != 0:
             t = t + datetime.timedelta(seconds = 16)
         df['time'][i] = t
-        ID_list.append(t.hour)
+        if t.day != maxx.day:
+            ID_list.append(t.hour)
+        else:
+            ID_list.append(24)
     df['ID'] = ID_list
     
     return df
