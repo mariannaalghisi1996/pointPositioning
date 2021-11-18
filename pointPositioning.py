@@ -86,7 +86,7 @@ def saastamoinenModel (h, eta):
         return tropoDelay
 
 
-def pointPositioning(satellites, R_0, ionoParams):
+def pointPositioning(satellites, R_0, ionoParams, cutoff):
     iter_max = 20
     omega_dot_E = 7.2921151467*0.00001 #rad/sec
     c = 2.99792458 * 10**8
@@ -146,7 +146,7 @@ def pointPositioning(satellites, R_0, ionoParams):
             obs_tk['Az_S'] = azimuth
             obs_tk['El_S'] = elevation
             
-            obs_tk = obs_tk[obs_tk['El_S']>=5].reset_index().drop(columns=['index'])
+            obs_tk = obs_tk[obs_tk['El_S']>=cutoff].reset_index().drop(columns=['index'])
             
             # Realizzazione matrice A e vettore parametri noti b
             A = []
