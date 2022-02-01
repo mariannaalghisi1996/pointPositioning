@@ -51,42 +51,18 @@ def checkFormat(i):
             ID = 'D'
     return ID
 
-def getIonoParams(file_path):
-    file = open(file_path, 'r')
-    lines = file.readlines()
-    for i in range(10):
-        l_i = lines[i].split()
-        if len(l_i) > 4:
-            if l_i[5] == 'ALPHA':
-                ion_alpha = l_i[0:4]
-            elif l_i[5] == 'BETA':
-                ion_beta = l_i[0:4]
-    ID = checkFormat(ion_alpha[0])
-    if ID == 'E':
-        for j in range(len(ion_alpha)):
-            ion_alpha[j] = float(ion_alpha[j])
-            ion_beta[j] = float(ion_beta[j])
+def getIonoParams(file_path, const_type):
+    hdr = gr.rinexheader(file_path)
+    iono_dict = hdr.get('IONOSPHERIC CORR')
+    if const_type == 'G':
+        alpha = iono_dict.get('GPSA')
+        beta = iono_dict.get('GPSB')
+        return [alpha, beta]
+    elif const_type == 'E':
+        gal_par = iono_dict.get('GAL')
+        return gal_par
     else:
-        if ID == 'D':
-            for j in range(len(ion_alpha)):
-                valA = ion_alpha[j].split('D')
-                base = valA[0]
-                if base[0] != '-':
-                    valA = '0'+valA[0]+'E'+valA[1]
-                    ion_alpha[j] = float(valA)
-                else:
-                    valA = '-0'+valA[0][1:]+'E'+valA[1]
-                    ion_alpha[j] = float(valA)
-            for j in range(len(ion_beta)):
-                valB = ion_beta[j].split('D')
-                base = valB[0]
-                if base[0] != '-':
-                    valB = '0'+valB[0]+'E'+valB[1]
-                    ion_beta[j] = float(valB)
-                else:
-                    valB = '-0'+valB[0][1:]+'E'+valB[1]
-                    ion_beta[j] = float(valB)
-    return [ion_alpha, ion_beta]
+        raise ValueError('Invalid parameter passed')
 
 def getStartPos(file_path):
     file = open(file_path, 'r')

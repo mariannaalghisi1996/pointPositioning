@@ -7,8 +7,11 @@ import numpy as np
 import math
 import transformations as trf
 import RINEXreader
+import georinex as gr
 
-def ionoCorrection(phi_u, lambda_u, A, E, GPStime, alpha, beta):
+def ionoCorrectionGPS(phi_u, lambda_u, A, E, GPStime, iono_params):
+    alpha = iono_params[0]
+    beta = iono_params[1]
     # elevation from 0 to 90 degrees
     E = abs(E)    
 
@@ -67,6 +70,8 @@ def ionoCorrection(phi_u, lambda_u, A, E, GPStime, alpha, beta):
 
     return T_iono
 
+#def ionoCorrectionGALILEO()
+
 def saastamoinenModel (h, eta):
     if (h > -500) and (h < 5000):
         eta #satellite elevation in radians
@@ -86,12 +91,11 @@ def saastamoinenModel (h, eta):
         return tropoDelay
 
 
-def pointPositioning(satellites, R_0, ionoParams, cutoff):
+def pointPositioning(satellites, nav_path, obs_path, cutoff):
+    R_0 = gr.rinexheader(obs_path).get('position')
     iter_max = 20
     omega_dot_E = 7.2921151467*0.00001 #rad/sec
     c = 2.99792458 * 10**8
-    alpha = ionoParams[0]
-    beta = ionoParams[1]
     
     all_times = []
     for p in satellites['time']:
@@ -148,73 +152,85 @@ def pointPositioning(satellites, R_0, ionoParams, cutoff):
             
             obs_tk = obs_tk[obs_tk['El_S']>=cutoff].reset_index().drop(columns=['index'])
             
-            # Realizzazione matrice A e vettore parametri noti b
-            A = []
-            iono = []
-            tropo = []
-            b = []
-            sin_el = []
-            all_sv = []
-            
-            for z in range(len(obs_tk)):
-                xs = obs_tk['xs'][z]
-                ys = obs_tk['ys'][z]
-                zs = obs_tk['zs'][z]
-                xs_dot = obs_tk['xs_dot'][z]
-                ys_dot = obs_tk['ys_dot'][z]
-                zs_dot = obs_tk['zs_dot'][z]
-                ts = obs_tk['ts'][z]
-                Xs_v = np.array([[xs], [ys], [zs]])
-                Xs_dot_v = np.array([[xs_dot], [ys_dot], [zs_dot]])
-                ro_double = (xs - xr)*(xs - xr) + (ys - yr)*(ys - yr) + (zs - zr)*(zs - zr)
-                ro_approx = np.sqrt(ro_double)
-                e_rs = (Xr_v - Xs_v)/ro_approx
-                prod_vett = Xs_dot_v + np.array([[-omega_dot_E*ys], [omega_dot_E*xs], [0]])
-                alpha_1 = -(e_rs[0][0]*prod_vett[0][0] +  e_rs[1][0]*prod_vett[1][0] + e_rs[2][0]*prod_vett[2][0])
-                alpha_2 = -(e_rs[0][0]*Xs_dot_v[0][0] + e_rs[1][0]*Xs_dot_v[1][0] + e_rs[2][0]*Xs_dot_v[2][0])
-                k_1 = 1 - alpha_1/c + alpha_1*alpha_1/(c*c)
-                k_2 = -alpha_2 + alpha_1*alpha_2/c
-                # effetto relativistico
-                eff_R = 2*(xs*xs_dot + ys*ys_dot + zs*zs_dot)/c
-                # Iono correction
-                iono_j = ionoCorrection(trf.radToDeg(lat0), trf.radToDeg(lon0), obs_tk['Az_S'][z], obs_tk['El_S'][z], t, alpha, beta)
-                el_j = trf.degToRad(obs_tk['El_S'][z])
-                tropo_j = saastamoinenModel(h0, el_j)
-                # calcolo b per il j-esimo satellite
-                b_j = k_1*ro_approx - c*ts + eff_R + iono_j + tropo_j
-                b.append([b_j]) 
-                A.append([k_1*e_rs[0][0], k_1*e_rs[1][0], k_1*e_rs[2][0], (k_2 + c)/c ])
-                iono.append(iono_j)
-                tropo.append(tropo_j)
-                all_sv.append(obs_tk['sv'][z])
-                sin_el.append([1/np.sin(el_j)])
+            if len(obs_tk) > 4:
+                # Realizzazione matrice A e vettore parametri noti b
+                A = []
+                iono = []
+                tropo = []
+                b = []
+                sin_el = []
+                all_sv = []
                 
+                for z in range(len(obs_tk)):
+                    const_type = obs_tk['constellation'][z]
+                    xs = obs_tk['xs'][z]
+                    ys = obs_tk['ys'][z]
+                    zs = obs_tk['zs'][z]
+                    xs_dot = obs_tk['xs_dot'][z]
+                    ys_dot = obs_tk['ys_dot'][z]
+                    zs_dot = obs_tk['zs_dot'][z]
+                    ts = obs_tk['ts'][z]
+                    Xs_v = np.array([[xs], [ys], [zs]])
+                    Xs_dot_v = np.array([[xs_dot], [ys_dot], [zs_dot]])
+                    ro_double = (xs - xr)*(xs - xr) + (ys - yr)*(ys - yr) + (zs - zr)*(zs - zr)
+                    ro_approx = np.sqrt(ro_double)
+                    e_rs = (Xr_v - Xs_v)/ro_approx
+                    prod_vett = Xs_dot_v + np.array([[-omega_dot_E*ys], [omega_dot_E*xs], [0]])
+                    alpha_1 = -(e_rs[0][0]*prod_vett[0][0] +  e_rs[1][0]*prod_vett[1][0] + e_rs[2][0]*prod_vett[2][0])
+                    alpha_2 = -(e_rs[0][0]*Xs_dot_v[0][0] + e_rs[1][0]*Xs_dot_v[1][0] + e_rs[2][0]*Xs_dot_v[2][0])
+                    k_1 = 1 - alpha_1/c + alpha_1*alpha_1/(c*c)
+                    k_2 = -alpha_2 + alpha_1*alpha_2/c
+                    # effetto relativistico
+                    eff_R = 2*(xs*xs_dot + ys*ys_dot + zs*zs_dot)/c
+                    
+                    # Iono correction
+                    iono_params = RINEXreader.getIonoParams(nav_path, const_type)
+                    if const_type == 'G':
+                        iono_j = ionoCorrectionGPS(trf.radToDeg(lat0), trf.radToDeg(lon0), obs_tk['Az_S'][z], obs_tk['El_S'][z], t, iono_params)
+                    else:
+                        iono_j = 0
+                    el_j = trf.degToRad(obs_tk['El_S'][z])
+                    tropo_j = saastamoinenModel(h0, el_j)
+                    # calcolo b per il j-esimo satellite
+                    b_j = k_1*ro_approx - c*ts + eff_R + iono_j + tropo_j
+                    b.append([b_j]) 
+                    A.append([k_1*e_rs[0][0], k_1*e_rs[1][0], k_1*e_rs[2][0], (k_2 + c)/c ])
+                    iono.append(iono_j)
+                    tropo.append(tropo_j)
+                    all_sv.append(obs_tk['sv'][z])
+                    sin_el.append([1/np.sin(el_j)])
+                    
+                    
+                # Termini noti
+                P1 = (np.array([obs_tk['C1C'].to_list()])).transpose()
+                b = np.array(b)
+                A = np.array(A)
+                sin_el = np.array(sin_el)
+                dP1_oss = P1 - b
+                Q = np.identity(len(obs_tk))*sin_el
+                Q_inv = np.linalg.inv(Q)
+                A_t = A.transpose()
+                N = np.dot(np.dot(A_t, Q_inv), A)
+                N_inv = np.linalg.inv(N)
                 
-            # Termini noti
-            P1 = (np.array([obs_tk['P1'].to_list()])).transpose()
-            b = np.array(b)
-            A = np.array(A)
-            sin_el = np.array(sin_el)
-            dP1_oss = P1 - b
-            Q = np.identity(len(obs_tk))*sin_el
-            Q_inv = np.linalg.inv(Q)
-            A_t = A.transpose()
-            N = np.dot(np.dot(A_t, Q_inv), A)
-            N_inv = np.linalg.inv(N)
+                # Stima delle incognite
+                incognite_stima = np.dot(np.dot(np.dot( N_inv, A_t), Q_inv), dP1_oss )
+                
+                xr = incognite_stima[0][0] + xr
+                yr = incognite_stima[1][0] + yr
+                zr = incognite_stima[2][0] + zr
+                dtr = incognite_stima[3][0]/c
             
-            # Stima delle incognite
-            incognite_stima = np.dot(np.dot(np.dot( N_inv, A_t), Q_inv), dP1_oss )
-            
-            xr = incognite_stima[0][0] + xr
-            yr = incognite_stima[1][0] + yr
-            zr = incognite_stima[2][0] + zr
-            dtr = incognite_stima[3][0]/c
+            else:
+                xr = np.nan
+                yr = np.nan
+                zr = np.nan
+                dtr = np.nan
             
         new_row = pd.DataFrame([[w, xr, yr, zr, dtr, len(obs_tk)]], columns=['datetime', 'xr', 'yr', 'zr', 'dtr', 'in_view_sat'])
-        print(w, 'ok')
+        #print(w, 'ok')
         results_cart = results_cart.append(new_row)
 
-    
     results_cart = results_cart.reset_index()
     return results_cart
 

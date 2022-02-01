@@ -5,6 +5,7 @@ Created on Mon Aug 23 12:04:49 2021
 @author: maria
 """
 import numpy as np
+import pandas as pd
 import math
 
 def cartToGeod(x, y, z):
@@ -47,72 +48,40 @@ def degToRad(deg):
     rad = deg*math.pi/180
     return rad
 
-def topocent(XR, XS):
-    XRgeod = cartToGeod(XR[0][0], XR[1][0], XR[2][0])
-    phi = degToRad(XRgeod[0])
-    lam = degToRad(XRgeod[1])
+def GCtoLC(P0_cart, points_df):
+    P0_g = cartToGeod(P0_cart[0], P0_cart[1], P0_cart[2])
+    lat0 = degToRad(P0_g[0])
+    lon0 = degToRad(P0_g[1])
     
-    cl = np.cos(lam)
-    sl = np.sin(lam)
-    cb = np.cos(phi)
-    sb = np.sin(phi)
-    F = np.array([[-sl, -sb*cl, cb*cl], [cl, -sb*sl, cb*sl], [0, cb, sb]])
-    F_t = F.transpose()
-    delta_X = XS - XR
-    LC = np.dot(F_t, delta_X)
-    E = LC[0][0]
-    N = LC[1][0]
-    U = LC[2][0]
-    hor_dis = np.sqrt(E*E + N*N)
-    if hor_dis < 0.1:
-        Az = 0
-        El = 90
-    else:
-        Az = radToDeg(np.arctan(E/N))
-        El = radToDeg(np.arctan2(U,hor_dis))
-    return [hor_dis, Az, El]
-
-def topocent2(XR, XS):
-    XScart = geodToCart(XS[0][0], XS[1][0], XS[2][0])
-    XRgeod = cartToGeod(XR[0][0], XR[1][0], XR[2][0])
-    phi = degToRad(XRgeod[0])
-    lam = degToRad(XRgeod[1])
-    XS_array = np.array([[XScart[0]], [XScart[1]], [XScart[2]]])
+    results_LC = pd.DataFrame()
+    results_LC['dx'] = points_df['xr'] - P0_cart[0]
+    results_LC['dy'] = points_df['yr'] - P0_cart[1]
+    results_LC['dz'] = points_df['zr'] - P0_cart[2]
     
-    cl = np.cos(lam)
-    sl = np.sin(lam)
-    cb = np.cos(phi)
-    sb = np.sin(phi)
-    F = np.array([[-sl, -sb*cl, cb*cl], [cl, -sb*sl, cb*sl], [0, cb, sb]])
-    F_t = F.transpose()
-    delta_X = XS_array - XR
-    LC = np.dot(F_t, delta_X)
-    E = LC[0][0]
-    N = LC[1][0]
-    U = LC[2][0]
-    hor_dis = np.sqrt(E*E + N*N)
-    if hor_dis < 0.1:
-        Az = 0
-        El = 90
-    else:
-        Az = (np.arctan(E/N))
-        El = radToDeg(np.arctan2(U,hor_dis))
-    return [hor_dis, Az, El]
-
-def GCtoLC(P0, Px):
-    P0_deg = cartToGeod(P0[0], P0[1], P0[2])
-    lat0 = degToRad(P0_deg[0])
-    lon0 = degToRad(P0_deg[1])
-    delta_x = np.array([ [Px[0] - P0[0]],
-                         [Px[1] - P0[1]],
-                         [Px[2] - P0[2]] ])
+    E=[]
+    N=[]
+    U=[]
+    
+    # Definition of the rotation matrix
     R = np.array([ [-np.sin(lon0), np.cos(lon0), 0],
                     [-np.sin(lat0)*np.cos(lon0), -np.sin(lat0)*np.sin(lon0), np.cos(lat0)],
                     [np.cos(lat0)*np.cos(lon0), np.cos(lat0)*np.sin(lon0), np.sin(lat0)]
                     ])
-    LC = np.dot(R, delta_x)
-    E = LC[0][0]
-    N = LC[1][0]
-    U = LC[2][0]
-    return [E, N, U]
-
+    
+    for i in range(len(results_LC)):
+        delta_array_i = np.array([[results_LC['dx'][i]], [results_LC['dy'][i]], [results_LC['dz'][i]]])
+        ENU =np.dot(R, delta_array_i)
+        E.append(ENU[0][0])
+        N.append(ENU[1][0])
+        U.append(ENU[2][0])
+    
+    results_LC['E'] = E
+    results_LC['N'] = N
+    results_LC['U'] = U
+    
+    if 'datetime' in points_df.columns:
+        results_LC['time'] = points_df['datetime']
+        
+    results_LC = results_LC.reset_index().drop(columns=['index'])
+    
+    return results_LC
