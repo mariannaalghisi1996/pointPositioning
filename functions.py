@@ -12,16 +12,20 @@ import georinex as gr
 
 def fixTime(df):
     ID_list = []
+    time_list = []
     maxx = df['time'].max()
     for i in range(len(df)):
         t = df['time'][i]
         while t.second != 0:
             t = t + datetime.timedelta(seconds = 16)
-        df['time'][i] = t
+        #df['time'][i] = t
+        time_list.append(t)
         if t.day != maxx.day:
             ID_list.append(t.hour)
         else:
             ID_list.append(24)
+    df = df.drop(columns=['time'])
+    df['time'] = time_list
     df['ID'] = ID_list
     
     return df
@@ -179,10 +183,10 @@ def getGALILEOorbits(nav_path, obs_path, time_range):
     nav['time_in_s'] = tn_in_s
     nav = nav[nav['time']>=time_range[0]].reset_index().drop(columns=['index'])
     
-    obs = gr.load(obs_path, use = 'E', meas = ['C1C'])
+    obs = gr.load(obs_path, use = 'E', meas = ['C8Q'])
     time_obs = obs.time.to_dataframe()['time'].tolist()
     
-    satellites = pd.DataFrame(columns = ['time', 'sv', 'xs', 'ys', 'zs', 'xs_dot', 'ys_dot', 'zs_dot', 'ts', 'C1C'])
+    satellites = pd.DataFrame(columns = ['time', 'sv', 'xs', 'ys', 'zs', 'xs_dot', 'ys_dot', 'zs_dot', 'ts', 'C8Q'])
     
     for w in time_range:
         w_in_s = w.hour*3600 + w.minute*60 + w.second
@@ -191,7 +195,7 @@ def getGALILEOorbits(nav_path, obs_path, time_range):
         if len(available_sat) > 0:
             for sv_i in available_sat:
                 nav_i = nav[nav['sv'] == sv_i].reset_index().drop(columns=['index'])
-                nav_i['delta_T'] = nav_i['time_in_s'] - w_in_s
+                nav_i['delta_T'] = w_in_s - nav_i['time_in_s']
                 nav_i = nav_i[nav_i['delta_T'] >= 0]
                 if len(nav_i) >= 0 and nav_i['delta_T'].min()<3600:
                     PAR = nav_i[nav_i['delta_T'] == nav_i['delta_T'].min()].reset_index().drop(columns=['index', 'time'])
@@ -201,10 +205,42 @@ def getGALILEOorbits(nav_path, obs_path, time_range):
                     satellites = satellites.append(sat)
     
     satellites = satellites.reset_index().drop(columns=['index'])
+    satellites = satellites.rename(columns = {'C8Q': 'C1C'})
     satellites['constellation'] = 'E'
     
     return satellites              
+
+def getGALILEOorbits_simplified(nav_path, available_sat, w):
+    nav = gr.load(nav_path, use=['E']).to_dataframe().dropna().sort_values(by=['time'], ascending = True).reset_index()
+    #nav = fixTime(nav)
+    
+    tn_in_s = []
+    for i in range(len(nav)):
+        t = nav['time'][i]
+        t_s = t.hour*3600 + t.minute*60 + t.second
+        tn_in_s.append(t_s)
         
+    nav['time_in_s'] = tn_in_s
+    nav = (nav[nav['time']>=dtt.strptime('2021-05-06 00:00:00', '%Y-%m-%d %H:%M:%S')]).reset_index().drop(columns=['index'])
+    
+    satellites = pd.DataFrame(columns = ['time', 'sv', 'xs', 'ys', 'zs', 'xs_dot', 'ys_dot', 'zs_dot', 'ts', 'C1C'])
+    
+    w_in_s = w.hour*3600 + w.minute*60 + w.second
+    
+    for sv_i in available_sat:
+        nav_i = nav[nav['sv'] == sv_i].reset_index().drop(columns=['index'])
+        nav_i['delta_T'] = w_in_s - nav_i['time_in_s']
+        nav_i = nav_i[nav_i['delta_T'] >= 0]
+        if len(nav_i) >= 0 and nav_i['delta_T'].min()<7200:
+            PAR = nav_i[nav_i['delta_T'] == nav_i['delta_T'].min()].reset_index().drop(columns=['index', 'time'])
+            PAR['time'] = w
+            sat = satPosVel(PAR)
+            satellites = satellites.append(sat)
+
+    satellites = satellites.reset_index().drop(columns=['index'])
+
+    return satellites     
+       
 
 def checkSatPos(satellites, eph_path):
     
@@ -244,7 +280,10 @@ def checkSatPos(satellites, eph_path):
     
     return confronto
 
-def checkSatVel(sat, df_gps):
+def checkSatVelGPS(sat, nav_path, time_range):
+    
+    df_gps = gr.load(nav_path, use=['G']).to_dataframe().dropna().sort_values(by=['time'], ascending = True).reset_index()
+    df_gps = fixTime(df_gps)
     velocita = pd.DataFrame(columns=['sv', 'time', 'diff_x', 'diff_y', 'diff_z'])
     for i in range(len(sat)):
         row = getPar(sat['sv'][i], sat['time'][i], df_gps)
@@ -271,4 +310,37 @@ def checkSatVel(sat, df_gps):
     print('X: ', velocita['diff_x'].max())
     print('Y: ', velocita['diff_y'].max())
     print('Z: ', velocita['diff_z'].max())
+    return velocita
+
+def checkSatVelGAL(sat, nav_path, time_range):
+    velocita = pd.DataFrame(columns=['sv', 'time', 'v_x', 'v_y', 'v_z', 'diff_x', 'diff_y', 'diff_z'])
+    for i in time_range:
+        available_sat = sat[sat['time'] == i].reset_index()
+        sat_next = getGALILEOorbits_simplified(nav_path, available_sat['sv'].to_list(), i+datetime.timedelta(seconds=3))
+        
+        new_df = pd.DataFrame()
+        new_df['sv'] = available_sat['sv'].to_list()
+        new_df['v_x'] = (sat_next['xs'] - available_sat['xs'])/(3)
+        new_df['v_y'] = (sat_next['ys'] - available_sat['ys'])/(3)
+        new_df['v_z'] = (sat_next['zs'] - available_sat['zs'])/(3)
+        new_df['time'] = i
+        new_df['diff_x'] = abs(available_sat['xs_dot'] - new_df['v_x'])
+        new_df['diff_y'] = abs(available_sat['ys_dot'] - new_df['v_y'])
+        new_df['diff_z'] = abs(available_sat['zs_dot'] - new_df['v_z'])
+        velocita = velocita.append(new_df)
+        print(i)
+        
+    velocita = velocita.reset_index()
+    
+    print('abs(computed_value - expected_value for velocities')
+    print('Mean:')
+    print('X: ', velocita['diff_x'].mean())
+    print('Y: ', velocita['diff_y'].mean())
+    print('Z: ', velocita['diff_z'].mean())
+    
+    print('Max:')
+    print('X: ', velocita['diff_x'].max())
+    print('Y: ', velocita['diff_y'].max())
+    print('Z: ', velocita['diff_z'].max())
+    
     return velocita
