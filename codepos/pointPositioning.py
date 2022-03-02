@@ -5,8 +5,8 @@
 import pandas as pd
 import numpy as np
 import math
-import transformations as trf
-import RINEXreader
+import codepos.transformations as trf
+import codepos.RINEXreader as RINEXreader
 import georinex as gr
 
 def ionoCorrectionGPS(phi_u, lambda_u, A, E, GPStime, iono_params):
@@ -184,11 +184,9 @@ def pointPositioning(satellites, nav_path, obs_path, cutoff):
                     eff_R = 2*(xs*xs_dot + ys*ys_dot + zs*zs_dot)/c
                     
                     # Iono correction
-                    iono_params = RINEXreader.getIonoParams(nav_path, const_type)
-                    if const_type == 'G':
-                        iono_j = ionoCorrectionGPS(trf.radToDeg(lat0), trf.radToDeg(lon0), obs_tk['Az_S'][z], obs_tk['El_S'][z], t, iono_params)
-                    else:
-                        iono_j = 0
+                    iono_params = RINEXreader.getIonoParams(nav_path, 'G')
+                    iono_j = ionoCorrectionGPS(trf.radToDeg(lat0), trf.radToDeg(lon0), obs_tk['Az_S'][z], obs_tk['El_S'][z], t, iono_params)
+                    #iono_j = 0
                     el_j = trf.degToRad(obs_tk['El_S'][z])
                     tropo_j = saastamoinenModel(h0, el_j)
                     # calcolo b per il j-esimo satellite
@@ -350,10 +348,12 @@ def pointPositioning2(satellites, nav_path, obs_path, cutoff):
                         iono_j = ionoCorrectionGPS(trf.radToDeg(lat0), trf.radToDeg(lon0), obs_tk['Az_S'][z], obs_tk['El_S'][z], t, iono_params)
                     else:
                         iono_j = ionoCorrectionGPS(trf.radToDeg(lat0), trf.radToDeg(lon0), obs_tk['Az_S'][z], obs_tk['El_S'][z], t, iono_params)
-                        #if 'iono_delay' in obs_tk.columns:
-                        #    iono_j = obs_tk['iono_delay'][z]
-                        #else:
-                        #    iono_j = 0
+                        '''
+                        if 'iono_delay' in obs_tk.columns:
+                            iono_j = obs_tk['iono_delay'][z]
+                        else:
+                            iono_j = 0
+                        '''
                     el_j = trf.degToRad(obs_tk['El_S'][z])
                     tropo_j = saastamoinenModel(h0, el_j)
                     # calcolo b per il j-esimo satellite
@@ -398,7 +398,7 @@ def pointPositioning2(satellites, nav_path, obs_path, cutoff):
                 dtr_GAL = np.nan
             
         new_row = pd.DataFrame([[w, xr, yr, zr, dtr_GPS, dtr_GAL, len(obs_tk)]], columns=['datetime', 'xr', 'yr', 'zr', 'dtr_GPS', 'dtr_GAL', 'in_view_sat'])
-        print(w, 'ok')
+        #print(w, 'ok')
         results_cart = results_cart.append(new_row)
 
     results_cart = results_cart.reset_index()
@@ -498,7 +498,11 @@ def pointPositioning3(satellites, nav_path, obs_path, cutoff):
                     eff_R = 2*(xs*xs_dot + ys*ys_dot + zs*zs_dot)/c
                     
                     # Iono correction
-                    iono_params = RINEXreader.getIonoParams(nav_path, const_type)
+                    iono_params = RINEXreader.getIonoParams(nav_path, 'G')
+                    #iono_j = obs_tk['iono_delay'][z]
+                    #iono_j = ionoCorrectionGPS(trf.radToDeg(lat0), trf.radToDeg(lon0), obs_tk['Az_S'][z], obs_tk['El_S'][z], t, iono_params)
+                    iono_j = 0
+                    '''
                     if const_type == 'G':
                         iono_j = ionoCorrectionGPS(trf.radToDeg(lat0), trf.radToDeg(lon0), obs_tk['Az_S'][z], obs_tk['El_S'][z], t, iono_params)
                     else:
@@ -506,6 +510,7 @@ def pointPositioning3(satellites, nav_path, obs_path, cutoff):
                             iono_j = obs_tk['iono_delay'][z]
                         else:
                             iono_j = 0
+                    '''
                     el_j = trf.degToRad(obs_tk['El_S'][z])
                     tropo_j = saastamoinenModel(h0, el_j)
                     # calcolo b per il j-esimo satellite

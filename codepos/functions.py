@@ -7,7 +7,7 @@ import datetime as datetime
 from datetime import datetime as dtt
 import pandas as pd
 import numpy as np
-import RINEXreader
+import codepos.RINEXreader as RINEXreader
 import georinex as gr
 
 def fixTime(df):

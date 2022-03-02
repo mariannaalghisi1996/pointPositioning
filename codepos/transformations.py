@@ -7,6 +7,8 @@ Created on Mon Aug 23 12:04:49 2021
 import numpy as np
 import pandas as pd
 import math
+import datetime as datetime
+from datetime import datetime as dtt
 
 def cartToGeod(x, y, z):
     a = 6378137
@@ -85,3 +87,17 @@ def GCtoLC(P0_cart, points_df):
     results_LC = results_LC.reset_index().drop(columns=['index'])
     
     return results_LC
+
+def fixDateTime(df):
+    if 'time' in df.columns:
+        conv_t = []
+        for i in range(len(df)):
+            t_i = df['time'][i]
+            t_i_conv = dtt.strptime(t_i, '%Y-%m-%d %H:%M:%S')
+            conv_t.append(t_i_conv)
+        df = df.drop(columns=['time'])
+        df['time'] = conv_t
+        
+        return df
+    else:
+        raise Exception('No time columns to convert in the DataFrame')

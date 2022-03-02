@@ -4,24 +4,26 @@ Created on Wed Jan 26 10:16:39 2022
 
 @author: maria
 """
-
-import functions as fn
+# Import of the required libraries
 import pandas as pd
 import datetime as datetime
 from datetime import datetime as dtt
-import georinex as gr
-import numpy as np
-import transformations as trf 
-import pointPositioning as pp
-import easyPlot
 
-nav_path = 'C:/git/pointPositioning/pointPositioning/mose_nav.rnx'
-obs_path = 'C:/git/pointPositioning/pointPositioning/mose_obs.crx'
-eph_path = 'C:/git/pointPositioning/pointPositioning/EPH_2021_5_6.SP3'
+# Import of the software's modules
+import codepos.RINEXreader as rr
+import codepos.easyPlot as ep
+import codepos.functions as fn
+import codepos.pointPositioning as pp
+import codepos.transformations as trf
+from NQ import TEC
+
+nav_path = 'C:/git/pointPositioning/pointPositioning/testRINEX/mose_nav.rnx'
+obs_path = 'C:/git/pointPositioning/pointPositioning/testRINEX/mose_obs.crx'
+eph_path = 'C:/git/pointPositioning/pointPositioning/testRINEX/EPH_2021_5_6.SP3'
 
 time_range = []
 START = dtt.strptime('2021-05-06 00:00:00', '%Y-%m-%d %H:%M:%S')
-END = dtt.strptime('2021-05-06 23:45:00', '%Y-%m-%d %H:%M:%S')
+END = dtt.strptime('2021-05-06 23:55:00', '%Y-%m-%d %H:%M:%S')
 t = START
 while t <= END:
     time_range.append(t)
@@ -36,33 +38,9 @@ sat_gps.to_csv('C:/git/pointPositioning/pointPositioning/csv/sat_gps.csv')
 satellites = pd.concat([sat_gps, sat_galileo])
 satellites.to_csv('C:/git/pointPositioning/pointPositioning/csv/satellites.csv')
 '''
-sat_galileo = pd.read_csv('C:/git/pointPositioning/pointPositioning/csv/sat_galileo.csv')
-sat_galileo_new = pd.read_csv('C:/git/pointPositioning/pointPositioning/csv/sat_galileo_new.csv')
-sat_gps = pd.read_csv('C:/git/pointPositioning/pointPositioning/csv/sat_gps.csv')
-satellites = pd.read_csv('C:/git/pointPositioning/pointPositioning/csv/satellites.csv')
-
-conv_t = []
-for i in range(len(sat_gps)):
-    t_i = sat_gps['time'][i]
-    t_i_conv = dtt.strptime(t_i, '%Y-%m-%d %H:%M:%S')
-    conv_t.append(t_i_conv)
-
-sat_gps = sat_gps.drop(columns=['Unnamed: 0', 'time'])
-sat_gps['time'] = conv_t
-sat_galileo_new['iono_delay'] = sat_galileo_new['TEC_new']*40.3*10**16/(1575.42*10**6)**2
-
-klo = []
-
-for i in range(len(sat_galileo_new)):
-    
-
-satellites = pd.concat([sat_gps, sat_galileo_new])
-satellites = satellites.reset_index().drop(columns=['index'])
-satellites['iono_delay'] = satellites['TEC']*40.3*10**16/(1575.42*10**6)**2
-
-sat_galileo_new = sat_galileo_new.drop(columns=['time', 'Unnamed: 0'])
-sat_galileo_new['time'] = conv_t
-sat_galileo_new['iono_delay'] = sat_galileo_new['TEC']*40.3*10**16/(1575.42*10**6)**2
+sat_galileo = trf.fixDateTime(pd.read_csv('C:/git/pointPositioning/pointPositioning/csv/orbite/sat_galileo.csv'))
+sat_gps = trf.fixDateTime(pd.read_csv('C:/git/pointPositioning/pointPositioning/csv/orbite/sat_gps.csv'))
+satellites = trf.fixDateTime(pd.read_csv('C:/git/pointPositioning/pointPositioning/csv/orbite/satellites.csv'))
 
 # Controllo delle posizioni e clock offset
 '''
@@ -76,31 +54,55 @@ check_vel_GAL = fn.checkSatVelGAL(sat_galileo, nav_path, time_range)
 check_vel_GPS = fn.checkSatVelGPS(sat_gps, nav_path, time_range)
 '''
 
+# Plot delle orbite
+import folium
+
+M0SE_cart = [4642432.701789316, 1028629.1051167124, 4236854.058403561]
+M0SE_geod = trf.cartToGeod(4642432.701789316, 1028629.1051167124, 4236854.058403561)
+
+m = folium.Map(location=[M0SE_geod[0], M0SE_geod[1]], zoom_start=5)
+
+G1 = sat_gps[sat_gps['sv'] == 'G01'].reset_index().drop(columns=['index'])
+lat, lon = [], []
+for i in range(len(G1)):
+    temp = trf.cartToGeod(G1['xs'][i], G1['ys'][i], G1['zs'][i])
+    folium.Circle(
+        location=(temp[0], temp[1]),
+        radius=10,
+        fill=True,
+        fill_opacity=0.7
+    ).add_to(m)
+
+m.save('map.html')
+
+
 # POINT POSITIONING
 
 cutoff = 5
 results = pp.pointPositioning2(satellites, nav_path, obs_path, cutoff)
 results_k = pp.pointPositioning2(satellites, nav_path, obs_path, cutoff)
 
+results_gal_NQ = pp.pointPositioning3(sat_galileo, nav_path, obs_path, cutoff)
+results_gal_k = pp.pointPositioning3(sat_galileo, nav_path, obs_path, cutoff)
+results_gal_0 = pp.pointPositioning3(sat_galileo, nav_path, obs_path, cutoff)
 
-results_gps = pp.pointPositioning(sat_gps, nav_path, obs_path, cutoff)
-
-results_galileo = pp.pointPositioning(sat_galileo, nav_path, obs_path, cutoff)
-results_galileo_with_iono = pp.pointPositioning3(sat_galileo_new, nav_path, obs_path, cutoff)
-
-
+results.to_csv('C:/git/pointPositioning/pointPositioning/csv/pos/results.csv')
+results_k.to_csv('C:/git/pointPositioning/pointPositioning/csv/pos/results_k.csv')
+results_gal_NQ.to_csv('C:/git/pointPositioning/pointPositioning/csv/pos/results_gal_NQ.csv')
+results_gal_k.to_csv('C:/git/pointPositioning/pointPositioning/csv/pos/results_gal_k.csv')
+results_gal_0.to_csv('C:/git/pointPositioning/pointPositioning/csv/pos/results_gal_0.csv')
 
 M0SE_cart = [4642432.701789316, 1028629.1051167124, 4236854.058403561]
 
 results_LC = trf.GCtoLC(M0SE_cart, results)
 results_LC_k = trf.GCtoLC(M0SE_cart, results_k)
-results_LC_GPS = trf.GCtoLC(M0SE_cart, results_gps)
-results_LC_GAL = trf.GCtoLC(M0SE_cart, results_galileo)
-results_LC_GAL_iono = trf.GCtoLC(M0SE_cart, results_galileo_with_iono)
+results_LC_gal = trf.GCtoLC(M0SE_cart, results_gal_NQ)
+results_LC_gal_k = trf.GCtoLC(M0SE_cart, results_gal_k)
+results_LC_gal_0 = trf.GCtoLC(M0SE_cart, results_gal_0)
 
-easyPlot.getPlot(results_LC, 'time', 'E', 'red')
-easyPlot.getPlot(results_LC, 'time', 'N', 'blue')
-easyPlot.getPlot(results_LC, 'time', 'U', 'green')
+easyPlot.getPlot(results_LC_gal_k, 'time', 'E', 'red')
+easyPlot.getPlot(results_LC_k, 'time', 'N', 'blue')
+easyPlot.getPlot(results_LC_k, 'time', 'U', 'green')
 easyPlot.getPlot(results, 'datetime', 'dtr_GPS', 'magenta')
 
 easyPlot.getDoublePlot(results, results_galileo, 'datetime', 'dtr')
@@ -109,9 +111,9 @@ easyPlot.getDoublePlot(results_LC_k, results_LC, 'time', 'E')
 easyPlot.getDoublePlot(results_LC_k, results_LC, 'time', 'N')
 easyPlot.getDoublePlot(results_LC_k, results_LC, 'time', 'U')
 
-easyPlot.getTriplePlot(results_LC, results_LC_GPS, results_LC_GAL, 'time', 'E')
-easyPlot.getTriplePlot(results_LC, results_LC_GPS, results_LC_GAL, 'time', 'N')
-easyPlot.getTriplePlot(results_LC, results_LC_GPS, results_LC_GAL, 'time', 'U')
+easyPlot.getTriplePlot(results_LC_gal, results_LC_gal_k, results_LC_gal_0, 'time', 'E')
+easyPlot.getTriplePlot(results_LC_gal, results_LC_gal_k, results_LC_gal_0, 'time', 'N')
+easyPlot.getTriplePlot(results_LC_gal, results_LC_gal_k, results_LC_gal_0, 'time', 'U')
 
 fig, ax = plt.subplots(figsize=(10,6))
 ax.plot(results['datetime'], results['dtr_GPS'], '-', color='orange')

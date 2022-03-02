@@ -1,4 +1,0 @@
-C:/Users/maria/OneDrive - Politecnico di Milano/Desktop/SAT_PP/code_PointPositioning/dati_zim/zim_nav.21n
-C:/Users/maria/OneDrive - Politecnico di Milano/Desktop/SAT_PP/code_PointPositioning/dati_zim/zim_oss.21d
-C:/Users/maria/OneDrive - Politecnico di Milano/Desktop/SAT_PP/dati/esa_eph_5min.sp3
-5
