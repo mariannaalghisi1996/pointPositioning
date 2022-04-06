@@ -79,7 +79,7 @@ m.save('map.html')
 # POINT POSITIONING
 
 cutoff = 5
-results = pp.pointPositioning2(satellites, nav_path, obs_path, cutoff)
+results = pp.pointPositioning(satellites, nav_path, obs_path, cutoff)
 results_k = pp.pointPositioning2(satellites, nav_path, obs_path, cutoff)
 
 results_gal_NQ = pp.pointPositioning3(sat_galileo, nav_path, obs_path, cutoff)
@@ -100,9 +100,9 @@ results_LC_gal = trf.GCtoLC(M0SE_cart, results_gal_NQ)
 results_LC_gal_k = trf.GCtoLC(M0SE_cart, results_gal_k)
 results_LC_gal_0 = trf.GCtoLC(M0SE_cart, results_gal_0)
 
-easyPlot.getPlot(results_LC_gal_k, 'time', 'E', 'red')
-easyPlot.getPlot(results_LC_k, 'time', 'N', 'blue')
-easyPlot.getPlot(results_LC_k, 'time', 'U', 'green')
+ep.getPlot(results_LC, 'time', 'E', 'red')
+ep.getPlot(results_LC, 'time', 'N', 'blue')
+ep.getPlot(results_LC, 'time', 'U', 'green')
 easyPlot.getPlot(results, 'datetime', 'dtr_GPS', 'magenta')
 
 easyPlot.getDoublePlot(results, results_galileo, 'datetime', 'dtr')
