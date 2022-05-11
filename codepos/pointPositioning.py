@@ -255,7 +255,7 @@ def pointPositioning(satellites, nav_path, obs_path, cutoff):
                 dtr_GAL = np.nan
             
         new_row = pd.DataFrame([[w, xr, yr, zr, dtr_GPS, dtr_GAL, len(obs_tk)]], columns=['datetime', 'xr', 'yr', 'zr', 'dtr_GPS', 'dtr_GAL', 'in_view_sat'])
-        #print(w, 'ok')
+        print(w, 'ok')
         results_cart = results_cart.append(new_row)
 
     results_cart = results_cart.reset_index()

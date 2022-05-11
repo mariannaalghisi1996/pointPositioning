@@ -80,6 +80,18 @@ m.save('map.html')
 
 cutoff = 5
 results = pp.pointPositioning(satellites, nav_path, obs_path, cutoff)
+
+deltaDTR = pd.DataFrame()
+delta_list = []
+for i in range(len(results)-1):
+    Ddtr = results['dtr_GAL'][i+1] - results['dtr_GAL'][i]
+    delta_list.append(Ddtr)
+
+deltaDTR['Ddtr_gal'] = delta_list
+deltaDTR['time'] = time_range[0:(len(time_range)-1)]
+
+ep.getPlot(deltaDTR, 'time', 'Ddtr_gal', 'red')
+
 results_k = pp.pointPositioning2(satellites, nav_path, obs_path, cutoff)
 
 results_gal_NQ = pp.pointPositioning3(sat_galileo, nav_path, obs_path, cutoff)

@@ -22,6 +22,7 @@ def convertDate(date):
 
 def readSP3(file_path):
     eph = pd.DataFrame(columns=['time', 'sv', 'xs', 'ys', 'zs', 'ts'])
+    time, sv, xs, ys, zs, ts = [], [], [], [], [], [] 
     file = open(file_path, 'r')
     lines = file.readlines()
     for i in range(22, len(lines)):
@@ -32,16 +33,22 @@ def readSP3(file_path):
            if (line[0] == 'P'):
                line_list = line.split()
                if line_list[4] != '9999':
-                   sv_i = line_list[0][1:]
-                   xs_i = float(line_list[1])*1000
-                   ys_i = float(line_list[2])*1000
-                   zs_i = float(line_list[3])*1000
-                   ts_i = float(line_list[4])*0.000001
+                   time.append(date)
+                   sv.append(line_list[0][1:])
+                   xs.append(float(line_list[1])*1000)
+                   ys.append(float(line_list[2])*1000)
+                   zs.append(float(line_list[3])*1000)
+                   ts.append(float(line_list[4])*0.000001)
                    
-                   new_eph = pd.DataFrame([[date, sv_i, xs_i, ys_i, zs_i, ts_i]], columns=['time', 'sv', 'xs', 'ys', 'zs', 'ts'])
-                   eph = eph.append(new_eph)
-    eph = eph.reset_index().drop(columns = ['index'])
+    eph['time'] = time
+    eph['sv'] = sv
+    eph['xs'] = xs
+    eph['ys'] = ys
+    eph['zs'] = zs
+    eph['ts'] = ts
+
     return eph
+
 
 def checkFormat(i):
     for j in range(len(i)):
