@@ -21,7 +21,7 @@ def convertDate(date):
     return date_time
 
 def readSP3(file_path):
-    eph = pd.DataFrame(columns=['time', 'sv', 'xs', 'ys', 'zs', 'ts'])
+    eph = pd.DataFrame()
     time, sv, xs, ys, zs, ts = [], [], [], [], [], [] 
     file = open(file_path, 'r')
     lines = file.readlines()
@@ -42,10 +42,10 @@ def readSP3(file_path):
                    
     eph['time'] = time
     eph['sv'] = sv
-    eph['xs'] = xs
-    eph['ys'] = ys
-    eph['zs'] = zs
-    eph['ts'] = ts
+    eph['X'] = xs
+    eph['Y'] = ys
+    eph['Z'] = zs
+    eph['TS'] = ts
 
     return eph
 

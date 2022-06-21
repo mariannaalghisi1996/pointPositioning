@@ -17,14 +17,14 @@ def fixTime(df):
     for i in range(len(df)):
         t = df['time'][i]
         while t.second != 0:
-            t = t + datetime.timedelta(seconds = 16)
+            t = t + datetime.timedelta(seconds = 1)
         #df['time'][i] = t
         time_list.append(t)
-        if t.day != maxx.day:
-            ID_list.append(t.hour)
-        else:
-            ID_list.append(24)
-    df = df.drop(columns=['time'])
+        # if t.day != maxx.day:
+        ID_list.append(t.hour)
+    #     else:
+    #         ID_list.append(24)
+    # df = df.drop(columns=['time'])
     df['time'] = time_list
     df['ID'] = ID_list
     
@@ -65,12 +65,14 @@ def getPar(sv, time, df_gps):
         return 'error'  
     
 def satPosVel(res):
+    # Constant definition:
     mu =  398600500000000 #m3/sec2
     omega_dot_E = 7.2921151467*0.00001 #rad/sec
     i = 0
     time = res['time'][i]
     start_day = time.day - time.weekday() - 1
     t = (time.day - start_day)*24*3600 + time.hour*3600 + time.minute*60 + time.second
+    
     # Compute the time tk from the ephemerides reference epoch toe 
     tk = t - res['Toe'][i]
     if tk> 302400:
@@ -137,42 +139,98 @@ def satPosVel(res):
     zk_dot = yk_o_dot*np.sin(ik) + yk_o*ik_dot*np.cos(ik)
 
     # Inserisco i valori nella tabella dei satelliti
-    val = [(res['time'][i], res['sv'][i], xk, yk, zk, xk_dot, yk_dot, zk_dot, dts )]
-    new_row = pd.DataFrame(val, columns = ['time', 'sv', 'xs', 'ys', 'zs', 'xs_dot', 'ys_dot', 'zs_dot', 'ts'])
+    
+    val = [res['time'][i], res['sv'][i], xk, yk, zk, xk_dot, yk_dot, zk_dot, dts]
+    #new_row = pd.DataFrame(val, columns = ['time', 'sv', 'xs', 'ys', 'zs', 'xs_dot', 'ys_dot', 'zs_dot', 'ts'])
         
-    return new_row
+    return val
 
+def getBRDCorbits(nav_path, time_range, const):
+    nav = gr.load(nav_path, use=const)
+    all_sat = list(nav.sv.to_dataframe()['sv'])
+    all_time = list(nav.time.to_dataframe()['time'])
+    nav = nav.to_dataframe().reset_index()
+    nav = nav[['sv', 
+             'time',
+             'SVclockBias',
+             'SVclockDrift',
+             'SVclockDriftRate',
+             'Crs',
+             'DeltaN',
+             'M0',
+             'Cuc',
+             'Eccentricity',
+             'Cus',
+             'sqrtA',
+             'Toe',
+             'Cic',
+             'Omega0',
+             'Cis',
+             'Io',
+             'Crc',
+             'omega',
+             'OmegaDot',
+             'IDOT',
+             ]]
+    nav = nav[nav['time'] >= time_range[0]]
+    nav =  nav[nav['time'] <= time_range[len(time_range)-1]].reset_index().drop(columns=['index'])
+    
+    time_in_s = []
+    for i in range(len(nav)):
+        t = nav['time'][i]
+        time_in_s.append(t.hour*3600 + t.minute*60 + t.second)
+    nav['t_in_s'] = time_in_s
+    data = []
+        
+    for sv_i in all_sat:
+        nav_i = nav[nav['sv'] == sv_i].reset_index().drop(columns=['index'])
+        for t in time_range:
+            t_s = t.hour*3600 + t.minute*60 + t.second
+            nav_i['diff'] = t_s - nav_i['t_in_s']
+            nav_i_temp = nav_i[nav_i['diff'] >= 0]
+            if len(nav_i_temp) > 0 and nav_i['diff'].min()<7200:
+                par = nav_i_temp[nav_i_temp['diff'] == nav_i_temp['diff'].min()].reset_index()
+                par['time'] = t
+                sat = satPosVel(par)
+                data.append(sat)
+    satellites = pd.DataFrame(data, columns = ['time', 'sv', 'xs', 'ys', 'zs', 'xs_dot', 'ys_dot', 'zs_dot', 'ts'])
+    return satellites
+            
 def getGPSorbits(nav_path, obs_path, time_range):
     
-    nav = gr.load(nav_path, use=['G']).to_dataframe().dropna().sort_values(by=['time'], ascending = True).reset_index()
+    nav = gr.load(nav_path, use=['C']).to_dataframe().dropna().sort_values(by=['time'], ascending = True).reset_index()
     nav = fixTime(nav)
     
-    obs = gr.load(obs_path, use = 'G', meas = ['C1C'])
-    time_obs = obs.time.to_dataframe()['time'].tolist()
+    all_sat = []
     
-    satellites = pd.DataFrame(columns = ['time', 'sv', 'xs', 'ys', 'zs', 'xs_dot', 'ys_dot', 'zs_dot', 'ts', 'C1C'])
+    obs = gr.load(obs_path, use = 'C', meas = ['C1C'])
+    time_obs = obs.time.to_dataframe()['time'].tolist()
     
     for w in time_range:
         obs_tk = (((obs.sel(time = w)).to_dataframe()).dropna()).reset_index()
         available_sat = (obs_tk['sv']).to_list()
         if len(available_sat) > 0:
-            for sv_i in available_sat:
+            for i in range(len(available_sat)):
+                sv_i = available_sat[i]
                 # Ogni satellite in vista nell'istante di tempo considerato viene associato allo slot
                 # di parametri a cui appartiene attraverso la funzione getPar
                 sat_par = getPar(sv_i, w, nav)
                 # Se i valori sono disponibli
                 if type(sat_par) == pd.core.frame.DataFrame:
-                    sat = satPosVel(sat_par).reset_index()
-                    sat = sat.merge(obs_tk, on = ['sv', 'time'], how = 'left')
-                    satellites = satellites.append(sat)
-    satellites = satellites.reset_index().drop(columns=['index'])
-    satellites['constellation'] = 'G'
+                    sat = satPosVel(sat_par)
+                    sat = sat + [obs_tk['C1C'][i]]
+                    all_sat.append(sat)
+    
+    satellites = pd.DataFrame(all_sat, columns = ['time', 'sv', 'xs', 'ys', 'zs', 'xs_dot', 'ys_dot', 'zs_dot', 'ts', 'C1C'])
+    satellites['constellation'] = 'C'
     
     return satellites
 
 def getGALILEOorbits(nav_path, obs_path, time_range):
     nav = gr.load(nav_path, use=['E']).to_dataframe().dropna().sort_values(by=['time'], ascending = True).reset_index()
     nav = fixTime(nav)
+    
+    all_sat = []
     
     tn_in_s = []
     for i in range(len(nav)):
@@ -183,17 +241,19 @@ def getGALILEOorbits(nav_path, obs_path, time_range):
     nav['time_in_s'] = tn_in_s
     nav = nav[nav['time']>=time_range[0]].reset_index().drop(columns=['index'])
     
-    obs = gr.load(obs_path, use = 'E', meas = ['C8Q'])
+    obs = gr.load(obs_path, use = 'E', meas = ['C1C'])
+    obs_df = obs.to_dataframe().dropna().reset_index()
     time_obs = obs.time.to_dataframe()['time'].tolist()
     
-    satellites = pd.DataFrame(columns = ['time', 'sv', 'xs', 'ys', 'zs', 'xs_dot', 'ys_dot', 'zs_dot', 'ts', 'C8Q'])
+    #satellites = pd.DataFrame(columns = ['time', 'sv', 'xs', 'ys', 'zs', 'xs_dot', 'ys_dot', 'zs_dot', 'ts', 'C8Q'])
     
     for w in time_range:
         w_in_s = w.hour*3600 + w.minute*60 + w.second
         obs_tk = (((obs.sel(time = w)).to_dataframe()).dropna()).reset_index()
         available_sat = (obs_tk['sv']).to_list()
         if len(available_sat) > 0:
-            for sv_i in available_sat:
+            for i in range(len(available_sat)):
+                sv_i = available_sat[i]
                 nav_i = nav[nav['sv'] == sv_i].reset_index().drop(columns=['index'])
                 nav_i['delta_T'] = w_in_s - nav_i['time_in_s']
                 nav_i = nav_i[nav_i['delta_T'] >= 0]
@@ -201,18 +261,19 @@ def getGALILEOorbits(nav_path, obs_path, time_range):
                     PAR = nav_i[nav_i['delta_T'] == nav_i['delta_T'].min()].reset_index().drop(columns=['index', 'time'])
                     PAR['time'] = w
                     sat = satPosVel(PAR)
-                    sat = sat.merge(obs_tk, on = ['sv', 'time'], how = 'left')
-                    satellites = satellites.append(sat)
+                    sat = sat + [obs_tk['C1C'][i]]
+                    all_sat.append(sat)
     
-    satellites = satellites.reset_index().drop(columns=['index'])
-    satellites = satellites.rename(columns = {'C8Q': 'C1C'})
+    satellites = pd.DataFrame(all_sat, columns = ['time', 'sv', 'xs', 'ys', 'zs', 'xs_dot', 'ys_dot', 'zs_dot', 'ts', 'C1C'])
     satellites['constellation'] = 'E'
     
-    return satellites              
+    return satellites    
 
-def getGALILEOorbits_simplified(nav_path, available_sat, w):
-    nav = gr.load(nav_path, use=['E']).to_dataframe().dropna().sort_values(by=['time'], ascending = True).reset_index()
-    #nav = fixTime(nav)
+def getOrbits(nav_path, obs_path, time_range):
+    nav = gr.load(nav_path, use=['G']).to_dataframe().dropna().sort_values(by=['time'], ascending = True).reset_index()
+    nav = fixTime(nav)
+    
+    all_sat = []
     
     tn_in_s = []
     for i in range(len(nav)):
@@ -221,40 +282,50 @@ def getGALILEOorbits_simplified(nav_path, available_sat, w):
         tn_in_s.append(t_s)
         
     nav['time_in_s'] = tn_in_s
-    nav = (nav[nav['time']>=dtt.strptime('2021-05-06 00:00:00', '%Y-%m-%d %H:%M:%S')]).reset_index().drop(columns=['index'])
+    nav = nav[nav['time']>=time_range[0]].reset_index().drop(columns=['index'])
     
-    satellites = pd.DataFrame(columns = ['time', 'sv', 'xs', 'ys', 'zs', 'xs_dot', 'ys_dot', 'zs_dot', 'ts', 'C1C'])
+    obs = gr.load(obs_path, use = 'G', meas = ['C1C'])
+    obs_df = obs.to_dataframe().dropna().reset_index()
+    time_obs = obs.time.to_dataframe()['time'].tolist()
     
-    w_in_s = w.hour*3600 + w.minute*60 + w.second
+    #satellites = pd.DataFrame(columns = ['time', 'sv', 'xs', 'ys', 'zs', 'xs_dot', 'ys_dot', 'zs_dot', 'ts', 'C8Q'])
     
-    for sv_i in available_sat:
-        nav_i = nav[nav['sv'] == sv_i].reset_index().drop(columns=['index'])
-        nav_i['delta_T'] = w_in_s - nav_i['time_in_s']
-        nav_i = nav_i[nav_i['delta_T'] >= 0]
-        if len(nav_i) >= 0 and nav_i['delta_T'].min()<7200:
-            PAR = nav_i[nav_i['delta_T'] == nav_i['delta_T'].min()].reset_index().drop(columns=['index', 'time'])
-            PAR['time'] = w
-            sat = satPosVel(PAR)
-            satellites = satellites.append(sat)
-
-    satellites = satellites.reset_index().drop(columns=['index'])
-
-    return satellites     
-       
+    for w in time_range:
+        w_in_s = w.hour*3600 + w.minute*60 + w.second
+        obs_tk = (((obs.sel(time = w)).to_dataframe()).dropna()).reset_index()
+        available_sat = (obs_tk['sv']).to_list()
+        if len(available_sat) > 0:
+            for i in range(len(available_sat)):
+                sv_i = available_sat[i]
+                nav_i = nav[nav['sv'] == sv_i].reset_index().drop(columns=['index'])
+                nav_i['delta_T'] = w_in_s - nav_i['time_in_s']
+                nav_i = nav_i[nav_i['delta_T'] >= 0]
+                if len(nav_i) >= 0 and nav_i['delta_T'].min()<3600:
+                    PAR = nav_i[nav_i['delta_T'] == nav_i['delta_T'].min()].reset_index().drop(columns=['index', 'time'])
+                    PAR['time'] = w
+                    sat = satPosVel(PAR)
+                    sat = sat + [obs_tk['C1C'][i]]
+                    all_sat.append(sat)
+    
+    satellites = pd.DataFrame(all_sat, columns = ['time', 'sv', 'xs', 'ys', 'zs', 'xs_dot', 'ys_dot', 'zs_dot', 'ts', 'C1C'])
+    satellites['constellation'] = 'G'
+    
+    return satellites                     
+                 
 
 def checkSatPos(satellites, eph_path):
     
     eph = RINEXreader.readSP3(eph_path)
-    eph = eph.rename(columns={'xs':'X', 'ys':'Y', 'zs':'Z', 'ts':'TS'})
         
     '''STATISTICS'''
     
     confronto =  satellites.merge(eph, on = ['sv', 'time']).reset_index()
+    confronto = confronto.rename(columns={'xs_x':'xs', 'ys_x':'ys', 'zs_x':'zs', 'ts_x':'ts'})
     confronto['delta_x'] = abs(confronto['xs'] - confronto['X'])
     confronto['delta_y'] = abs(confronto['ys'] - confronto['Y'])
     confronto['delta_z'] = abs(confronto['zs'] - confronto['Z'])
     confronto['delta_ts'] = abs(confronto['ts'] - confronto['TS'])
-    confronto = confronto[['time', 'sv', 'delta_x', 'delta_y', 'delta_z', 'delta_ts']]
+    confronto = confronto[['time', 'sv', 'delta_x', 'delta_y', 'delta_z', 'delta_ts']].dropna()
     
     mean_x = confronto['delta_x'].mean()
     mean_y = confronto['delta_y'].mean()

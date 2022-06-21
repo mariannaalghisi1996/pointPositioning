@@ -56,13 +56,16 @@ def GCtoLC(P0_cart, points_df):
     lon0 = degToRad(P0_g[1])
     
     results_LC = pd.DataFrame()
-    results_LC['dx'] = points_df['xr'] - P0_cart[0]
-    results_LC['dy'] = points_df['yr'] - P0_cart[1]
-    results_LC['dz'] = points_df['zr'] - P0_cart[2]
+    results_LC['dx'] = points_df['X'] - P0_cart[0]
+    results_LC['dy'] = points_df['Y'] - P0_cart[1]
+    results_LC['dz'] = points_df['Z'] - P0_cart[2]
     
     E=[]
     N=[]
     U=[]
+    az = []
+    el = []
+    dist = []
     
     # Definition of the rotation matrix
     R = np.array([ [-np.sin(lon0), np.cos(lon0), 0],
@@ -76,15 +79,32 @@ def GCtoLC(P0_cart, points_df):
         E.append(ENU[0][0])
         N.append(ENU[1][0])
         U.append(ENU[2][0])
+        d_h = np.sqrt(ENU[0][0]**2 + ENU[1][0]**2)
+        dist.append(d_h)
+        if d_h < 0.1:
+            az.append(0)
+            el.append(90)
+        else:
+            az.append(radToDeg(np.arctan(ENU[0][0]/ENU[1][0])))
+            el.append(radToDeg(np.arctan2(ENU[2][0], d_h)))
+    
+    if 'datetime' in points_df.columns:
+        results_LC['time'] = points_df['datetime']
+    
+    if 'time'in points_df.columns:
+        results_LC['time'] = points_df['time']
+        
+    if 'sv' in points_df.columns:
+        results_LC['sv'] = points_df['sv']
     
     results_LC['E'] = E
     results_LC['N'] = N
     results_LC['U'] = U
+    results_LC['Az'] = az
+    results_LC['El'] = el
+    results_LC['Dist'] = dist
     
-    if 'datetime' in points_df.columns:
-        results_LC['time'] = points_df['datetime']
-        
-    results_LC = results_LC.reset_index().drop(columns=['index'])
+    results_LC = results_LC.drop(columns=['dx', 'dy', 'dz'])
     
     return results_LC
 

@@ -205,12 +205,13 @@ def pointPositioning(satellites, nav_path, obs_path, cutoff):
                     if const_type == 'G':
                         iono_j = ionoCorrectionGPS(trf.radToDeg(lat0), trf.radToDeg(lon0), obs_tk['Az_S'][z], obs_tk['El_S'][z], t, iono_params)
                     else:
-                        #iono_j = ionoCorrectionGPS(trf.radToDeg(lat0), trf.radToDeg(lon0), obs_tk['Az_S'][z], obs_tk['El_S'][z], t, iono_params)
-
-                        if 'iono_delay' in obs_tk.columns:
-                            iono_j = obs_tk['iono_delay'][z]
-                        else:
-                            iono_j = 0
+                        iono_j = ionoCorrectionGPS(trf.radToDeg(lat0), trf.radToDeg(lon0), obs_tk['Az_S'][z], obs_tk['El_S'][z], t, iono_params)
+                        # # print('E use Klob')
+                        # if 'iono_delay' in obs_tk.columns:
+                        #     iono_j = obs_tk['iono_delay'][z]
+                        # else:
+                        #     iono_j = ionoCorrectionGPS(trf.radToDeg(lat0), trf.radToDeg(lon0), obs_tk['Az_S'][z], obs_tk['El_S'][z], t, iono_params)
+                    
                     el_j = trf.degToRad(obs_tk['El_S'][z])
                     tropo_j = saastamoinenModel(h0, el_j)
                     # calcolo b per il j-esimo satellite
@@ -236,17 +237,24 @@ def pointPositioning(satellites, nav_path, obs_path, cutoff):
                 Q_inv = np.linalg.inv(Q)
                 A_t = A.transpose()
                 N = np.dot(np.dot(A_t, Q_inv), A)
-                N_inv = np.linalg.inv(N)
                 
-                # Stima delle incognite
-                incognite_stima = np.dot(np.dot(np.dot( N_inv, A_t), Q_inv), dP1_oss )
+                if np.linalg.det(N) != 0:
+                    N_inv = np.linalg.inv(N)
                 
-                xr = incognite_stima[0][0] + xr
-                yr = incognite_stima[1][0] + yr
-                zr = incognite_stima[2][0] + zr
-                dtr_GPS = incognite_stima[3][0]/c
-                dtr_GAL = incognite_stima[4][0]/c
-            
+                    # Stima delle incognite
+                    incognite_stima = np.dot(np.dot(np.dot( N_inv, A_t), Q_inv), dP1_oss )
+                    
+                    xr = incognite_stima[0][0] + xr
+                    yr = incognite_stima[1][0] + yr
+                    zr = incognite_stima[2][0] + zr
+                    dtr_GPS = incognite_stima[3][0]/c
+                    dtr_GAL = incognite_stima[4][0]/c
+                else:
+                    xr = np.nan
+                    yr = np.nan
+                    zr = np.nan
+                    dtr_GPS = np.nan
+                    dtr_GAL = np.nan
             else:
                 xr = np.nan
                 yr = np.nan
